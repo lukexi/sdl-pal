@@ -2,6 +2,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ForeignFunctionInterface #-}
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE OverloadedStrings #-}
 module SDL.Pal (module SDL.Pal, module SDL) where
 import SDL
 import SDL.Internal.Types
@@ -17,6 +18,8 @@ import Linear.Affine
 import Control.Lens
 import Data.List (sort)
 import Foreign
+import System.IO.Unsafe
+import Control.Exception
 
 #if defined(mingw32_HOST_OS)
 foreign import ccall "win32_SetProcessDpiAware" win32_SetProcessDpiAware :: IO Bool
@@ -29,32 +32,53 @@ glProfileVersion = Core Normal 4 1
 glProfileVersion = Core Normal 4 4
 #endif
 
-createGLWindow :: MonadIO m => Text -> m Window
-createGLWindow windowName = do
+-- | MacOS deals poorly with creating and destroying
+-- multiple OpenGL contexts, so we use a global context instead.
+-- You must create a window to create a GL context with SDL, so
+-- we create a dummy window and immediately destroy it.
+{-# NOINLINE globalGLContext #-}
+globalGLContext :: GLContext
+globalGLContext = unsafePerformIO $ do
+    initialWindow <- createWindow "" defaultWindow
+        { windowOpenGL = Just $ defaultOpenGL
+            { glProfile = glProfileVersion
+            }
+        }
+    glContext <- glCreateContext initialWindow
+    destroyWindow initialWindow
+    return glContext
+
+initSDL = do
     initialize
         [ InitVideo
         , InitEvents
-        -- , InitJoystick , InitGameController
         ]
 
     -- Make Windows treat us as HighDPI aware
 #if defined(mingw32_HOST_OS)
     _ <- liftIO win32_SetProcessDpiAware
 #endif
+    evaluate globalGLContext
 
-    window <- createWindow windowName defaultWindow
-        { windowOpenGL = Just $ defaultOpenGL
-            { glProfile = glProfileVersion
-            }
-        , windowHighDPI = True
-        , windowInitialSize = V2 1600 1200
-        --, windowPosition = Centered
+
+createGLWindowDefault windowName = createGLWindow windowName
+    defaultWindow
+        { windowInitialSize = V2 640 480
         , windowPosition = Absolute (P (V2 100 100))
         , windowResizable = True
         }
-    glContext <- glCreateContext window
-    glMakeCurrent window glContext
-    swapInterval $= ImmediateUpdates
+
+createGLWindow :: MonadIO m => Text -> WindowConfig -> m Window
+createGLWindow windowName windowConfig = do
+
+    window <- createWindow windowName windowConfig
+        { windowOpenGL = Just $ defaultOpenGL
+            { glProfile = glProfileVersion
+            , glMultisampleSamples = 4
+            }
+        , windowHighDPI = True
+        }
+    glMakeCurrent window globalGLContext
     return window
 
 getDrawableSize :: (Num a, MonadIO m) => Window -> m (V2 a)
