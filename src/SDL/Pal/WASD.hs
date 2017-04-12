@@ -15,11 +15,17 @@ moveSpeed = 0.01
 applyMouseLook :: (Epsilon a, RealFloat a, Fractional a, MonadIO m, MonadState s m)
                => Window -> Lens' s (Pose a) -> m ()
 applyMouseLook win poseLens = do
-    V2 x y <- getMouseLocationV2
-    V2 w h <- get (windowSize win)
-    let (x', y') = (x - (fromIntegral w / 2), y - (fromIntegral h / 2))
-    poseLens . posOrientation .= axisAngle (V3 0 1 0) (-x'/500)
-                               * axisAngle (V3 1 0 0) (-y'/500)
+    (mode, V2 x y) <- getMouseLocationV2
+
+    case mode of
+        RelativeLocation -> do
+            poseLens . posOrientation *= axisAngle (V3 0 1 0) (-x/500)
+            poseLens . posOrientation *= axisAngle (V3 1 0 0) (-y/500)
+        AbsoluteLocation -> do
+            V2 w h <- get (windowSize win)
+            let (x', y') = (x - (fromIntegral w / 2), y - (fromIntegral h / 2))
+            poseLens . posOrientation .= axisAngle (V3 0 1 0) (-x'/500)
+                                       * axisAngle (V3 1 0 0) (-y'/500)
 
 -- | Move player by the given vector,
 -- rotated to be relative to their current orientation

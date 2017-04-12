@@ -89,10 +89,10 @@ getDrawableSize (Window window) =
       Raw.glGetDrawableSize window wptr hptr
       fmap fromIntegral <$> (V2 <$> peek wptr <*> peek hptr)
 
-getMouseLocationV2 :: (Num a, MonadIO m) => m (V2 a)
+getMouseLocationV2 :: (Num a, MonadIO m) => m (LocationMode, V2 a)
 getMouseLocationV2 = do
-    (_, P loc) <- getModalMouseLocation
-    return (fromIntegral <$> loc)
+    (mode, P loc) <- getModalMouseLocation
+    return (mode, fromIntegral <$> loc)
 
 getWindowSizeV2 :: (Num a, MonadIO m) => Window -> m (V2 a)
 getWindowSizeV2 window = fmap fromIntegral <$> get (windowSize window)
@@ -191,7 +191,7 @@ cursorPosToWorldRay :: (MonadIO m)
                     -> Pose Float
                     -> m (Ray Float)
 cursorPosToWorldRay win proj pose = do
-    cursorPos <- getMouseLocationV2
+    (_, cursorPos) <- getMouseLocationV2
     windowPosToWorldRay win proj pose cursorPos
 
 
